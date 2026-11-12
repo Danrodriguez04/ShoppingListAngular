@@ -144,10 +144,30 @@
                 <ul class="purchase-items">
                   @for (item of entry.items; track $index) { <li>{{ item.name }} · {{ item.quantity }} {{ units[item.unit] }}</li> }
                 </ul>
-                <label>Adjuntar fotos de los tickets
-                  <input type="file" accept="image/jpeg,image/png" multiple [disabled]="busy()" (change)="uploadReceipts($event)">
-                </label>
-                <p class="hint">JPEG o PNG, hasta 5 MB por foto. Si el análisis automático está configurado, se enviará la foto a Gemini.</p>
+                <h3>Precios de los productos</h3>
+                @for (line of receiptPrices(); track $index) {
+                  <div class="price-row">
+                    <strong>{{ line.productName ?? line.text ?? 'Línea ilegible' }}</strong>
+                    @if (line.net !== null && line.net !== undefined) {
+                      <span>{{ line.net | number:'1.2-2' }} {{ line.currency }}</span>
+                    } @else { <span>Importe pendiente</span> }
+                    <small>
+                      @if (line.quantity && line.unit) { {{ line.quantity }} {{ units[line.unit] }} · }
+                      @if (line.store) { {{ line.store }} · }
+                      @if (!line.productName) { Sin asociar a la lista · }
+                      {{ line.confirmed ? 'Confirmado' : 'Pendiente de revisión' }}
+                    </small>
+                  </div>
+                } @empty { <p class="empty">Los precios aparecerán cuando se lea o se registre un ticket.</p> }
+                <div class="filters" role="group" aria-label="Adjuntar fotos de los tickets">
+                  <button type="button" class="quiet" [disabled]="busy()" (click)="receiptCamera.click()">Tomar foto</button>
+                  <input #receiptCamera type="file" accept="image/jpeg,image/png" capture="environment"
+                    hidden [disabled]="busy()" (change)="uploadReceipts($event)">
+                  <button type="button" class="quiet" [disabled]="busy()" (click)="receiptFiles.click()">Elegir archivos</button>
+                  <input #receiptFiles type="file" accept="image/jpeg,image/png" multiple
+                    hidden [disabled]="busy()" (change)="uploadReceipts($event)">
+                </div>
+                <p class="hint">JPEG o PNG, hasta 5 MB por foto tras la compresión. Si el análisis automático está configurado, se enviará la foto a Gemini.</p>
 
                 @for (receipt of receipts(); track receipt.id) {
                   <div class="receipt">
@@ -191,10 +211,10 @@
                             <fieldset class="receipt-grid">
                               <legend>Línea {{ i + 1 }}</legend>
                               <label>Texto del ticket<input [name]="'text' + i" [(ngModel)]="line.text" required maxlength="200"></label>
-                              <label>Producto del catálogo
+                              <label>Producto de esta compra
                                 <select [name]="'catalog' + i" [(ngModel)]="line.productId">
                                   <option [ngValue]="null">Sin asociar</option>
-                                  @for (product of products(); track product.id) { <option [ngValue]="product.id">{{ product.name }}</option> }
+                                  @for (product of purchaseProducts(); track product.productId) { <option [ngValue]="product.productId">{{ product.name }}</option> }
                                 </select>
                               </label>
                               <label>Cantidad<input [name]="'qty' + i" type="number" [(ngModel)]="line.quantity" min="0.0001" step="0.0001" required></label>

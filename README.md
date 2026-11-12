@@ -1,59 +1,47 @@
-# ShoppingListAngular
+# Compra en casa · Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.6.
+Interfaz en español para gestionar hogares, listas, compras y tickets desde móvil o escritorio. Angular se comunica con la [API Spring Boot](../../ShoppingList/README.md).
 
-## Development server
+## Arranque local
 
-To start a local development server, run:
+Usa una versión de Node compatible con el proyecto. La compilación se ha verificado con Node 24.15. Inicia el backend en el puerto 8002 y ejecuta desde este repositorio:
 
-```bash
-ng serve
+```sh
+npm ci
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Abre [Compra en casa](http://localhost:4200/). `npm start` carga [proxy.conf.json](proxy.conf.json), que reenvía las llamadas `/api/**` a `http://localhost:8002`. En un despliegue del build estático, el servidor que sirva Angular debe dirigir `/api` al backend. El proxy de desarrollo se aplica al arrancar con `npm start`.
 
-## Code scaffolding
+## Dónde está el código
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+| Archivo | Responsabilidad |
+| --- | --- |
+| [main.ts](src/main.ts) | Arranque de Angular. |
+| [app.ts](src/app/app.ts) | Componente raíz, tipos de datos, estado con signals, formularios, llamadas a la API y compresión de imágenes. |
+| [app.html](src/app/app.html) | Inicio de sesión, hogares, listas y detalle del historial. |
+| [app.css](src/app/app.css) y [styles.css](src/styles.css) | Estilos del componente y estilos globales. |
+| [app.spec.ts](src/app/app.spec.ts) | Pruebas del componente raíz. |
 
-```bash
-ng generate component component-name
+El componente raíz concentra las pantallas. Los formularios usan `ngModel`. Los valores derivados, como el progreso de la lista y los precios que se muestran, se calculan con `computed`. El método `api()` usa `fetch` con rutas relativas y añade el token JWT guardado en `sessionStorage`. El método `run()` controla el estado de carga y muestra errores.
+
+## Flujos de la interfaz
+
+1. **Sesión y hogar.** Tras entrar, Angular carga los hogares del usuario, las listas y el catálogo. Para añadir a un familiar registrado, el propietario introduce el ID que ese familiar puede copiar desde **Mi cuenta**.
+2. **Lista activa.** Al añadir un artículo, Angular busca el producto por nombre en el catálogo y lo crea si hace falta. El artículo guarda cantidad, unidad y nota. **Marcar todos como comprados** aplica el cambio a los pendientes de la lista activa. **Actualizar** vuelve a consultar la lista.
+3. **Finalizar compra.** El historial recibe los artículos marcados. Los artículos pendientes siguen disponibles en la lista. Al abrir una compra se solicitan sus tickets y su comparación de precios.
+4. **Adjuntar fotos.** **Tomar foto** solicita la cámara trasera en navegadores móviles compatibles. **Elegir archivos** permite seleccionar varias imágenes. Las dos acciones llaman a `uploadReceipts()`. El navegador prepara cada archivo con `compressReceipt()` antes de enviarlo en un `FormData` con el campo `file`.
+5. **Revisar precios.** El detalle muestra las líneas leídas y sus importes directamente. **Revisar importes** permite corregirlos y vincular cada línea a un producto de esa compra. **Ver foto** descarga el comprobante aparte. Angular consulta periódicamente mientras hay tickets en cola o en análisis y deja de consultar al cerrar la compra.
+
+La compresión limita el lado mayor a 4096 píxeles y prueba distintas calidades JPEG. Si el original está dentro de las dimensiones previstas y pesa menos que la versión generada, puede conservarse. El límite de subida es 5 MB por archivo. La clave de Gemini se configura en Spring Boot.
+
+## Comprobaciones
+
+```sh
+npm run build
+npm test -- --watch=false
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Para comprobar el flujo completo, inicia sesión, crea un hogar y una lista, añade dos productos, marca uno y finaliza la compra. Comprueba que el otro siga pendiente. Abre la compra en el historial, adjunta un ticket JPEG o PNG, revisa los importes y confirma. Con dos compras del mismo producto, comprueba que la segunda muestra el precio anterior. Para probar la cámara, abre la app desde un móvil compatible.
 
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Si la pantalla carga y las acciones fallan, comprueba que Spring Boot está en ejecución y que el puerto coincide con el de `proxy.conf.json`.

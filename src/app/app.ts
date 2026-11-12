@@ -59,6 +59,19 @@ export class App {
   protected readonly purchases = signal<Purchase[]>([]);
   protected readonly purchase = signal<Purchase | null>(null);
   protected readonly receipts = signal<Receipt[]>([]);
+  protected readonly purchaseProducts = computed(() =>
+    [...new Map(this.purchase()?.items.map(item => [item.productId, item])).values()]);
+  protected readonly receiptPrices = computed(() => {
+    const products = new Map(this.purchaseProducts().map(product => [product.productId, product.name]));
+    return this.receipts().flatMap(receipt => (receipt.data?.lines ?? []).filter(line => line != null).map(line => ({
+      ...line,
+      productName: line.productId ? products.get(line.productId) : undefined,
+      currency: receipt.data?.currency,
+      confirmed: receipt.status === 'CONFIRMED',
+      store: receipt.data?.store,
+    })));
+  });
+
   protected readonly prices = signal<PriceDifference[]>([]);
   protected readonly basket = computed(() => {
     const totals = new Map<string, { amount: number; count: number }>();
@@ -267,7 +280,7 @@ export class App {
       try {
         for (const file of files) {
           const form = new FormData();
-          form.set('file', file);
+          form.set('file', await this.compressReceipt(file));
           await this.api('/purchases/' + purchase.id + '/receipts', 'POST', form);
         }
       } finally {
@@ -275,6 +288,40 @@ export class App {
       }
     });
   }
+
+  private async compressReceipt(file: File): Promise<File> {
+    const maxBytes = 5 * 1024 * 1024;
+    const url = URL.createObjectURL(file);
+    try {
+      const photo = new Image();
+      photo.src = url;
+      await photo.decode();
+
+      const scale = Math.min(1, 4096 / Math.max(photo.naturalWidth, photo.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(photo.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(photo.naturalHeight * scale));
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) throw new Error('Canvas no disponible');
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(photo, 0, 0, canvas.width, canvas.height);
+
+      for (const quality of [0.88, 0.78, 0.68]) {
+        const jpeg = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!jpeg || jpeg.type !== 'image/jpeg' || jpeg.size > maxBytes) continue;
+        if (scale === 1 && file.size <= jpeg.size && ['image/jpeg', 'image/png'].includes(file.type)) return file;
+        return new File([jpeg], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: jpeg.type });
+      }
+    } catch {
+      throw new Error('No se pudo preparar la foto «' + file.name + '». Prueba con una imagen JPEG o PNG.');
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    if (file.size <= maxBytes && ['image/jpeg', 'image/png'].includes(file.type)) return file;
+    throw new Error('La foto «' + file.name + '» supera los 5 MB después de comprimirla.');
+  }
+
 
   protected retryReceipt(receipt: Receipt) {
     const purchase = this.purchase();
@@ -297,13 +344,9 @@ export class App {
     this.receiptDraft = {
       store: data?.store ?? '', date: data?.date ?? '', currency: data?.currency ?? 'EUR',
       total: data?.total ?? null, adjustment: data?.adjustment ?? 0,
-      lines: (data?.lines ?? []).filter(line => line != null).map(line => ({
-        ...line, text: line.text ?? '', productId: line.productId ??
-          this.products().find(product => this.productKey(product.name) === this.productKey(line.text ?? ''))?.id ?? null,
-      })),
+      lines: (data?.lines ?? []).filter(line => line != null).map(line => ({ ...line, text: line.text ?? '' })),
     };
     if (!this.receiptDraft.lines.length) this.addReceiptLine();
-    void this.viewReceipt(receipt);
   }
 
   protected addReceiptLine() {
@@ -343,10 +386,6 @@ export class App {
   private clearImage() {
     if (this.receiptImage) URL.revokeObjectURL(this.receiptImage);
     this.receiptImage = this.receiptImageId = '';
-  }
-
-  private productKey(value: string) {
-    return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
   }
 
   private async loadPurchase(id: string) {
