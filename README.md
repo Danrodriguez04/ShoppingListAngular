@@ -1,6 +1,6 @@
 # Compra en casa · Frontend
 
-Interfaz en español para gestionar hogares, listas, compras y tickets desde móvil o escritorio. Angular se comunica con la [API Spring Boot](../../ShoppingList/README.md).
+Interfaz en español para gestionar hogares, listas, compras y tickets desde móvil o escritorio. Angular se comunica con la [API Spring Boot].
 
 ## Arranque local
 
@@ -45,3 +45,14 @@ npm test -- --watch=false
 Para comprobar el flujo completo, inicia sesión, crea un hogar y una lista, añade dos productos, marca uno y finaliza la compra. Comprueba que el otro siga pendiente. Abre la compra en el historial, adjunta un ticket JPEG o PNG, revisa los importes y confirma. Con dos compras del mismo producto, comprueba que la segunda muestra el precio anterior. Para probar la cámara, abre la app desde un móvil compatible.
 
 Si la pantalla carga y las acciones fallan, comprueba que Spring Boot está en ejecución y que el puerto coincide con el de `proxy.conf.json`.
+
+## Despliegue en Railway
+
+El Dockerfile compila Angular con Node 24.15 y sirve el resultado con Caddy. Caddy escucha en PORT, conserva las rutas de Angular y reenvía /api al backend.
+
+1. Crea o selecciona un servicio para el frontend en Railway. Conecta el repositorio Angular o vincula el servicio con railway link y ejecuta railway up desde esta carpeta.
+2. En Variables del servicio, define BACKEND_URL con el origen de Spring Boot sin el sufijo /api. Si el backend vive en el mismo entorno de Railway, puedes usar http://backend.railway.internal:8002 sustituyendo el nombre y el puerto por los de tu servicio. Si está en otro alojamiento, usa su URL HTTPS.
+3. En Settings → Networking, usa Generate Domain. Puedes definir /healthz como ruta de comprobación del servicio.
+4. Abre el dominio generado y comprueba el inicio de sesión y la carga de listas. /healthz verifica Caddy. El inicio de sesión también verifica la conexión con Spring Boot.
+
+Railway necesita un backend accesible desde el contenedor. El localhost de tu ordenador solo sirve para el desarrollo local.

@@ -1,0 +1,24 @@
+{
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy {$BACKEND_URL:127.0.0.1:8002} {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
